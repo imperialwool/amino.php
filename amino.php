@@ -11,6 +11,9 @@
 			protected $community_id;
 			protected $message_id;
 		/////////////////////
+			protected $PREFIX = hex2bin("19");
+			protected $SIG_KEY = hex2bin("DFA5ED192DDA6E88A12FE12130DC6206B1251E44");
+			protected $DEVICE_KEY = hex2bin("E7309ECC0953C6FA60005B2765F99DBBC965C8E9");
 
 		public function __construct($email, $password){
 			$this->email = $email;
@@ -40,6 +43,20 @@
 			if ($sid) {
 				$headers["NDCAUTH"] = $sid;
 			}
+		}
+		
+		function signature($data) {
+			global $PREFIX, $SIG_KEY;
+			$data = is_string($data) ? utf8_encode($data) : $data;
+			$hashed_data = hash_hmac('sha1', $data, $SIG_KEY, true);
+			return base64_encode($PREFIX . $hashed_data);
+		}
+
+		function gen_deviceId($data = null) {
+			global $PREFIX, $DEVICE_KEY;
+			$identifier = $PREFIX . ($data ?? random_bytes(20));
+			$mac = hash_hmac('sha1', $identifier, $DEVICE_KEY, true);
+			return strtoupper(bin2hex($identifier) . bin2hex($mac));
 		}
 
 		public function request($method, $params = array()){
