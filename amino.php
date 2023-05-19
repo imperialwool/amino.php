@@ -1,4 +1,6 @@
 <?php
+	require 'lib/objects.php';
+	
 	class Amino
 	{
 		///////////////////
@@ -7,18 +9,34 @@
 			protected $sid = "";
 			protected $deviceId = "";
 		/////////////////////
-
-		public function __construct($email, $password){
+		
+		/**
+		  * Creating an object of the Amino class.
+		  *
+		  * @param string $email Email
+		  * @param string $password Password
+		  */
+		public function __construct($email, $password)
+		{
 			$this->email = $email;
 			$this->password = $password;
 			$this->sid = "";
 			$this->deviceId = $this->gen_deviceId();
 		}
 
-		public function generateHeaders($device_id = null, $sid = null, $data = null)
+		/**
+		  * Creating headers to work properly with Amino.
+		  *
+		  * @param string $device_id Device ID
+		  * @param string $sid Session ID
+		  * @param string[] $data POST data
+		  * @param string $lang Language like "en-US"
+		  * @return string[] Ready to use with cURL headers.
+		  */
+		public function bakeHeaders($device_id = null, $sid = null, $data = null, $lang = "en-US")
 		{
 			$headers = array(
-				"Accept-Language: en-US",
+				"Accept-Language: {$lang}",
 				"Content-Type: application/json; charset=utf-8",
 				"User-Agent: Apple iPhone12,1 iOS v15.5 Main/3.12.2",
 				"Host: service.narvii.com",
@@ -40,6 +58,12 @@
 			return $headers;
 		}
 		
+		/**
+		  * Creating signatures for POST data.
+		  *
+		  * @param string[] $data POST data
+		  * @return string Ready to use ndc-msg-sig.
+		  */
 		function signature($data) {
 			$PREFIX = hex2bin("19");
 			$SIG_KEY = hex2bin("DFA5ED192DDA6E88A12FE12130DC6206B1251E44");
@@ -48,6 +72,12 @@
 			return base64_encode($PREFIX . $hashed_data);
 		}
 
+		/**
+		  * Creating headers to work properly with Amino.
+		  *
+		  * @param string $data POST data
+		  * @return string Ready to use device_id.
+		  */
 		function gen_deviceId($data = null) {
 			$PREFIX = hex2bin("19");
 			$DEVICE_KEY = hex2bin("E7309ECC0953C6FA60005B2765F99DBBC965C8E9");
@@ -56,6 +86,11 @@
 			return strtoupper(bin2hex($identifier) . bin2hex($mac));
 		}
 
+		/**
+		  * Login to the account.
+		  *
+		  * @return UserProfile The profile you have entered.
+		  */
 		public function auth()
 		{
 			$request = $this->request(
@@ -72,9 +107,33 @@
 				]
 			);
 			$this->sid = $request[0]["sid"];
-			return $request;
+			return new UserProfile($request[0]);
+		}
+		
+		/**
+		  * Obtaining communities of which you are already a member.
+		  *
+		  * @param int $start Which community to start with (0 - start).
+		  * @param int $size How many communities to gather (maximum 100)
+		  * @return CommunityList A list of the communities you belong to
+		  */
+		public function myCommunities($start = 0, $size = 25)
+		{
+			$request = $this->request(
+				"g/s/community/joined?v=1&start={$start}&size={$size}",
+				"GET"
+			);
+			return new CommunityList($request[0]);
 		}
 
+		/**
+		  * The main function for creating queries to Amino.
+		  *
+		  * @param string $url The path to the request.
+		  * @param int $method The method of the request.
+		  * @param string[] $params Query parameters.
+		  * @return array Status code and data returned by the server.
+		  */
 		public function request($url, $method = "POST", $params = null){
 			$ch = curl_init();
 			curl_setopt($ch, CURLOPT_URL, "https://service.aminoapps.com/api/v1/".$url);
@@ -83,9 +142,9 @@
 			if ($method == "POST") {
 				curl_setopt($ch, CURLOPT_POST, true);
 				curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
-				$headers = $this->generateHeaders($this->deviceId, $this->sid, json_encode($params));
+				$headers = $this->bakeHeaders($this->deviceId, $this->sid, json_encode($params));
 			}
-			else $headers = $this->generateHeaders($this->deviceId, $this->sid);
+			else $headers = $this->bakeHeaders($this->deviceId, $this->sid);
 			curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 			curl_setopt($ch, CURLOPT_ENCODING, 'UTF-8');
 
